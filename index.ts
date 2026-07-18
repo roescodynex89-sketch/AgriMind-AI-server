@@ -95,7 +95,7 @@ connectDB();
 
 // -------------------- 1. USER MANAGEMENT API --------------------
 
-// ইউজার প্রোফাইল আপডেট (যেমন: প্রোফাইল এডিট করার জন্য)
+
 app.put(
   "/api/users/profile",
   verifyBetterAuthJWT as any,
@@ -123,13 +123,13 @@ app.put(
 
 // -------------------- 2. CROPS MANAGEMENT API --------------------
 
-// হোম পেজ বা ক্রপস এক্সপ্লোর পেজের জন্য সব ক্রপস গেট করা
+// crops explore
 app.get("/api/crops", async (req: Request, res: Response) => {
   try {
     const { category, search } = req.query;
     let query: any = {};
 
-    if (category) query.category = category;
+    
     if (search) query.name = { $regex: search, $options: "i" }; // Case-insensitive সার্চ
 
     const crops = await cropsCollection
@@ -142,7 +142,7 @@ app.get("/api/crops", async (req: Request, res: Response) => {
   }
 });
 
-// স্পেসিফিক ক্রপ ডিটেইলস (Details Page)
+// (Details Page)
 app.get("/api/crops/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -160,24 +160,41 @@ app.get("/api/crops/:id", async (req: Request, res: Response) => {
   }
 });
 
-// নতুন ক্রপ অ্যাড করা (Add Crops - Protected)
+
+
+
+
+//  (Add Crops - Protected)
 app.post(
   "/api/crops",
   verifyBetterAuthJWT as any,
   async (req: CustomRequest, res: Response) => {
     try {
-      const { name, category, description, price, imageUrl } = req.body;
+      const {
+  name,
+  imageUrl,
+  description,
+  farmingTips,
+  commonDiseases,
+  difficulty,
+  season,
+  location,
+} = req.body;
 
       const newCrop = {
-        name,
-        category,
-        description,
-        price: Number(price),
-        imageUrl,
-        userId: req.user?.id,
-        createdBy: req.user?.name,
-        createdAt: new Date(),
-      };
+  name,
+  imageUrl,
+  description,
+  farmingTips,
+  commonDiseases,
+  difficulty,
+  season,
+  location,
+
+  userId: req.user?.id,
+  createdBy: req.user?.name,
+  createdAt: new Date(),
+};
 
       const result = await cropsCollection.insertOne(newCrop);
       res.status(201).json({
@@ -191,14 +208,23 @@ app.post(
   },
 );
 
-// ক্রপ এডিট করা (Edit Crop - Protected)
+// (Edit Crop - Protected)
 app.put(
   "/api/crops/:id",
   verifyBetterAuthJWT as any,
   async (req: CustomRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const { name, category, description, price, imageUrl } = req.body;
+         const {
+  name,
+  imageUrl,
+  description,
+  farmingTips,
+  commonDiseases,
+  difficulty,
+  season,
+  location,
+} = req.body;
       const userId = req.user?.id;
 
       // শুধুমাত্র যে ইউজার ক্রপ অ্যাড করেছে সে যেন এডিট করতে পারে তার সিকিউরিটি চেক
@@ -215,10 +241,14 @@ app.put(
         {
           $set: {
             name,
-            category,
+             imageUrl,
             description,
-            price: Number(price),
-            imageUrl,
+            farmingTips,
+            commonDiseases,
+            difficulty,
+            season,
+            location,
+           
             updatedAt: new Date(),
           },
         },
@@ -231,7 +261,7 @@ app.put(
   },
 );
 
-// ক্রপ ডিলিট করা (Delete Crop - Protected)
+//  (Delete Crop - Protected)
 app.delete(
   "/api/crops/:id",
   verifyBetterAuthJWT as any,
@@ -258,9 +288,15 @@ app.delete(
   },
 );
 
+
+
+
+
+
+
 // -------------------- 3. USER COMMENTS MANAGEMENT API --------------------
 
-// নির্দিষ্ট ক্রপের কমেন্টগুলো দেখা
+// cmnt
 app.get("/api/comments/:cropId", async (req: Request, res: Response) => {
   try {
     const { cropId } = req.params;
@@ -274,7 +310,7 @@ app.get("/api/comments/:cropId", async (req: Request, res: Response) => {
   }
 });
 
-// নতুন কমেন্ট করা (Create Comment - Protected)
+//  (Create Comment - Protected)
 app.post(
   "/api/comments",
   verifyBetterAuthJWT as any,
@@ -298,7 +334,7 @@ app.post(
   },
 );
 
-// কমেন্ট এডিট করা (Edit Comment - Protected)
+// (Edit Comment - Protected)
 app.put(
   "/api/comments/:id",
   verifyBetterAuthJWT as any,
@@ -332,7 +368,7 @@ app.put(
   },
 );
 
-// কমেন্ট ডিলিট করা (Delete Comment - Protected)
+//  (Delete Comment - Protected)
 app.delete(
   "/api/comments/:id",
   verifyBetterAuthJWT as any,
@@ -362,6 +398,12 @@ app.delete(
     }
   },
 );
+
+
+
+
+
+
 
 // Base Route
 app.get("/", (req: Request, res: Response) => {
