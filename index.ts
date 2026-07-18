@@ -9,6 +9,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 
+import Groq from "groq-sdk";
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,6 +83,8 @@ const usersCollection = db.collection("users");
 const cropsCollection = db.collection("crops");
 const commentsCollection = db.collection("comments");
 
+const chatHistoryCollection = db.collection("chatHistory");
+
 // Database Connection Verify
 async function connectDB() {
   try {
@@ -93,8 +96,15 @@ async function connectDB() {
 }
 connectDB();
 
-// -------------------- 1. USER MANAGEMENT API --------------------
 
+
+// Ekhon eta:
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+
+
+
+// -------------------- 1. USER(name update) MANAGEMENT API --------------------
 
 app.put(
   "/api/users/profile",
@@ -102,11 +112,11 @@ app.put(
   async (req: CustomRequest, res: Response) => {
     try {
       const userId = req.user?.id;
-      const { name, phone, address } = req.body;
+      const { name } = req.body;
 
       const result = await usersCollection.updateOne(
-        { _id: userId as any }, // Better Auth সাধারণত স্ট্রিং ID ব্যবহার করে, তাই ObjectId নাও লাগতে পারে
-        { $set: { name, phone, address, updatedAt: new Date() } },
+        { _id: userId as any },
+        { $set: { name, updatedAt: new Date() } },
         { upsert: true },
       );
 
@@ -121,15 +131,13 @@ app.put(
   },
 );
 
-// -------------------- 2. CROPS MANAGEMENT API --------------------
+// --------------------crops explore --------------------
 
-// crops explore
 app.get("/api/crops", async (req: Request, res: Response) => {
   try {
-    const { category, search } = req.query;
+    const { search } = req.query;
     let query: any = {};
 
-    
     if (search) query.name = { $regex: search, $options: "i" }; // Case-insensitive সার্চ
 
     const crops = await cropsCollection
@@ -160,9 +168,7 @@ app.get("/api/crops/:id", async (req: Request, res: Response) => {
   }
 });
 
-
-
-
+// --------------------------------------------------
 
 //  (Add Crops - Protected)
 app.post(
@@ -171,30 +177,30 @@ app.post(
   async (req: CustomRequest, res: Response) => {
     try {
       const {
-  name,
-  imageUrl,
-  description,
-  farmingTips,
-  commonDiseases,
-  difficulty,
-  season,
-  location,
-} = req.body;
+        name,
+        imageUrl,
+        description,
+        farmingTips,
+        commonDiseases,
+        difficulty,
+        season,
+        location,
+      } = req.body;
 
       const newCrop = {
-  name,
-  imageUrl,
-  description,
-  farmingTips,
-  commonDiseases,
-  difficulty,
-  season,
-  location,
+        name,
+        imageUrl,
+        description,
+        farmingTips,
+        commonDiseases,
+        difficulty,
+        season,
+        location,
 
-  userId: req.user?.id,
-  createdBy: req.user?.name,
-  createdAt: new Date(),
-};
+        userId: req.user?.id,
+        createdBy: req.user?.name,
+        createdAt: new Date(),
+      };
 
       const result = await cropsCollection.insertOne(newCrop);
       res.status(201).json({
@@ -215,19 +221,19 @@ app.put(
   async (req: CustomRequest, res: Response) => {
     try {
       const { id } = req.params;
-         const {
-  name,
-  imageUrl,
-  description,
-  farmingTips,
-  commonDiseases,
-  difficulty,
-  season,
-  location,
-} = req.body;
+      const {
+        name,
+        imageUrl,
+        description,
+        farmingTips,
+        commonDiseases,
+        difficulty,
+        season,
+        location,
+      } = req.body;
       const userId = req.user?.id;
 
-      // শুধুমাত্র যে ইউজার ক্রপ অ্যাড করেছে সে যেন এডিট করতে পারে তার সিকিউরিটি চেক
+   
       const crop = await cropsCollection.findOne({
         _id: new ObjectId(id as string),
       });
@@ -241,14 +247,14 @@ app.put(
         {
           $set: {
             name,
-             imageUrl,
+            imageUrl,
             description,
             farmingTips,
             commonDiseases,
             difficulty,
             season,
             location,
-           
+
             updatedAt: new Date(),
           },
         },
@@ -288,13 +294,7 @@ app.delete(
   },
 );
 
-
-
-
-
-
-
-// -------------------- 3. USER COMMENTS MANAGEMENT API --------------------
+// --------------------  USER COMMENTS MANAGEMENT API --------------------
 
 // cmnt
 app.get("/api/comments/:cropId", async (req: Request, res: Response) => {
@@ -309,30 +309,6 @@ app.get("/api/comments/:cropId", async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-//  (Create Comment - Protected)
-app.post(
-  "/api/comments",
-  verifyBetterAuthJWT as any,
-  async (req: CustomRequest, res: Response) => {
-    try {
-      const { cropId, text } = req.body;
-
-      const newComment = {
-        cropId,
-        userId: req.user?.id,
-        userName: req.user?.name || "Anonymous",
-        text,
-        createdAt: new Date(),
-      };
-
-      const result = await commentsCollection.insertOne(newComment);
-      res.status(201).json({ success: true, commentId: result.insertedId });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
 
 // (Edit Comment - Protected)
 app.put(
@@ -399,6 +375,143 @@ app.delete(
   },
 );
 
+app.get(
+  "/api/comments/user",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const comments = await commentsCollection
+        .find({ userId: req.user?.id })
+        .sort({ createdAt: -1 })
+        .toArray();
+      res.json(comments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
+app.post(
+  "/api/comments",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const { cropId, text } = req.body;
+
+      const crop = await cropsCollection.findOne({
+        _id: new ObjectId(cropId as string),
+      });
+
+      const newComment = {
+        cropId,
+        cropName: crop?.name || "Unknown Crop",
+        userId: req.user?.id,
+        userName: req.user?.name || "Anonymous",
+        text,
+        createdAt: new Date(),
+      };
+
+      const result = await commentsCollection.insertOne(newComment);
+      res.status(201).json({ success: true, commentId: result.insertedId });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
+
+
+
+
+
+// -------------------- AI CHAT ASSISTANT API --------------------
+
+app.post(
+  "/api/ai/chat",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const { message } = req.body;
+      const userId = req.user?.id;
+
+      if (!message || !message.trim()) {
+        res.status(400).json({ error: "Message is required" });
+        return;
+      }
+
+      // Age-er 10 ta message context hisebe nao (optional but recommended)
+      const previousMessages = await chatHistoryCollection
+        .find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .toArray();
+
+      const conversationHistory = previousMessages.reverse().map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text as string,
+      }));
+
+      const systemPrompt = `
+        Tumi AgriMind AI — ekjon krishi upodesta.
+        Bangladeshi krishokder fosol, mati, rog-baladi, sar, ar
+        mausum songkranto proshner shohoj, practical uttor dao.
+        Uttor songkhipto rakho.
+      `;
+
+     const completion = await groq.chat.completions.create({
+  model: "llama-3.3-70b-versatile",
+  messages: [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory,
+    { role: "user", content: message },
+  ],
+  temperature: 0.6,
+});
+
+      const reply = completion.choices[0]?.message?.content ?? "";
+
+      // Database-e save koro (both user message ar AI reply)
+      await chatHistoryCollection.insertMany([
+        { userId, role: "user", text: message, createdAt: new Date() },
+        { userId, role: "assistant", text: reply, createdAt: new Date() },
+      ]);
+
+      res.json({ reply });
+    } catch (error: any) {
+      console.error("AI chat error:", error);
+      res.status(500).json({ error: "AI response generate korte problem hoyeche" });
+    }
+  },
+);
+
+// Chat history load korar jonno (page reload korle purono chat dekhabe)
+app.get(
+  "/api/ai/chat/history",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const history = await chatHistoryCollection
+        .find({ userId })
+        .sort({ createdAt: 1 })
+        .toArray();
+      res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -409,8 +522,6 @@ app.delete(
 app.get("/", (req: Request, res: Response) => {
   res.json({ message: "AgriMind AI Backend is running successfully!" });
 });
-
-
 
 app.listen(PORT, () => {
   console.log(`⚡ AgriMind Real Backend running on http://localhost:${PORT}`);
