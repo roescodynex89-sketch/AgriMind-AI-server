@@ -98,6 +98,33 @@ connectDB();
 // Ekhon eta:
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// -------------------- 1. USER(name update) MANAGEMENT API --------------------
+
+app.put(
+  "/api/users/profile",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const { name } = req.body;
+
+      const result = await usersCollection.updateOne(
+        { _id: userId as any },
+        { $set: { name, updatedAt: new Date() } },
+        { upsert: true },
+      );
+
+      res.json({
+        success: true,
+        message: "Profile updated successfully",
+        result,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 // --------------------crops explore --------------------
 
 app.get("/api/crops", async (req: Request, res: Response) => {
@@ -269,6 +296,8 @@ app.get(
   verifyBetterAuthJWT as any,
   async (req: CustomRequest, res: Response) => {
     try {
+      //
+
       const comments = await commentsCollection
         .find({ userId: req.user?.id })
         .sort({ createdAt: -1 })
