@@ -8,7 +8,6 @@ import dotenv from "dotenv";
 import { MongoClient, ObjectId } from "mongodb";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-
 import Groq from "groq-sdk";
 dotenv.config();
 const app = express();
@@ -96,40 +95,8 @@ async function connectDB() {
 }
 connectDB();
 
-
-
 // Ekhon eta:
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-
-
-
-// -------------------- 1. USER(name update) MANAGEMENT API --------------------
-
-app.put(
-  "/api/users/profile",
-  verifyBetterAuthJWT as any,
-  async (req: CustomRequest, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      const { name } = req.body;
-
-      const result = await usersCollection.updateOne(
-        { _id: userId as any },
-        { $set: { name, updatedAt: new Date() } },
-        { upsert: true },
-      );
-
-      res.json({
-        success: true,
-        message: "Profile updated successfully",
-        result,
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
 
 // --------------------crops explore --------------------
 
@@ -233,7 +200,6 @@ app.put(
       } = req.body;
       const userId = req.user?.id;
 
-   
       const crop = await cropsCollection.findOne({
         _id: new ObjectId(id as string),
       });
@@ -297,6 +263,23 @@ app.delete(
 // --------------------  USER COMMENTS MANAGEMENT API --------------------
 
 // cmnt
+
+app.get(
+  "/api/comments/user",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const comments = await commentsCollection
+        .find({ userId: req.user?.id })
+        .sort({ createdAt: -1 })
+        .toArray();
+      res.json(comments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 app.get("/api/comments/:cropId", async (req: Request, res: Response) => {
   try {
     const { cropId } = req.params;
@@ -309,6 +292,36 @@ app.get("/api/comments/:cropId", async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// cmnt post
+
+app.post(
+  "/api/comments",
+  verifyBetterAuthJWT as any,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const { cropId, text } = req.body;
+
+      const crop = await cropsCollection.findOne({
+        _id: new ObjectId(cropId as string),
+      });
+
+      const newComment = {
+        cropId,
+        cropName: crop?.name || "Unknown Crop",
+        userId: req.user?.id,
+        userName: req.user?.name || "Anonymous",
+        text,
+        createdAt: new Date(),
+      };
+
+      const result = await commentsCollection.insertOne(newComment);
+      res.status(201).json({ success: true, commentId: result.insertedId });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
 
 // (Edit Comment - Protected)
 app.put(
@@ -375,55 +388,6 @@ app.delete(
   },
 );
 
-app.get(
-  "/api/comments/user",
-  verifyBetterAuthJWT as any,
-  async (req: CustomRequest, res: Response) => {
-    try {
-      const comments = await commentsCollection
-        .find({ userId: req.user?.id })
-        .sort({ createdAt: -1 })
-        .toArray();
-      res.json(comments);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
-
-app.post(
-  "/api/comments",
-  verifyBetterAuthJWT as any,
-  async (req: CustomRequest, res: Response) => {
-    try {
-      const { cropId, text } = req.body;
-
-      const crop = await cropsCollection.findOne({
-        _id: new ObjectId(cropId as string),
-      });
-
-      const newComment = {
-        cropId,
-        cropName: crop?.name || "Unknown Crop",
-        userId: req.user?.id,
-        userName: req.user?.name || "Anonymous",
-        text,
-        createdAt: new Date(),
-      };
-
-      const result = await commentsCollection.insertOne(newComment);
-      res.status(201).json({ success: true, commentId: result.insertedId });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
-
-
-
-
-
-
 // -------------------- AI CHAT ASSISTANT API --------------------
 
 app.post(
@@ -458,15 +422,15 @@ app.post(
         Uttor songkhipto rakho.
       `;
 
-     const completion = await groq.chat.completions.create({
-  model: "llama-3.3-70b-versatile",
-  messages: [
-    { role: "system", content: systemPrompt },
-    ...conversationHistory,
-    { role: "user", content: message },
-  ],
-  temperature: 0.6,
-});
+      const completion = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversationHistory,
+          { role: "user", content: message },
+        ],
+        temperature: 0.6,
+      });
 
       const reply = completion.choices[0]?.message?.content ?? "";
 
@@ -479,7 +443,9 @@ app.post(
       res.json({ reply });
     } catch (error: any) {
       console.error("AI chat error:", error);
-      res.status(500).json({ error: "AI response generate korte problem hoyeche" });
+      res
+        .status(500)
+        .json({ error: "AI response generate korte problem hoyeche" });
     }
   },
 );
@@ -501,22 +467,6 @@ app.get(
     }
   },
 );
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Base Route
 app.get("/", (req: Request, res: Response) => {
