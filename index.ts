@@ -33,7 +33,7 @@ interface CustomRequest extends Request {
 }
 
 // Better Auth JWKS Configuration
-const clientAuthUrl = process.env.CLIENT_URI || "http://localhost:3000";
+const clientAuthUrl = process.env.CLIENT_URI ;
 const JWKS_URL = new URL(`${clientAuthUrl}/api/auth/jwks`);
 const JWKS = createRemoteJWKSet(JWKS_URL);
 
@@ -87,7 +87,7 @@ const chatHistoryCollection = db.collection("chatHistory");
 // Database Connection Verify
 async function connectDB() {
   try {
-    await client.connect();
+    // await client.connect();
     console.log("🍃 Connected successfully to MongoDB (database: AgriMind)");
   } catch (error) {
     console.error("MongoDB connection error:", error);
